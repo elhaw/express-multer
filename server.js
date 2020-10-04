@@ -1,77 +1,97 @@
 const express = require("express");
-const multer = require("multer");
-const cors = require("cors");
 const bodyParser = require("body-parser");
-const morgan = require("morgan");
-const path = require("path");
 // create express app
 const app = express();
 
-// upload file path
-// imageUr, cloudinary, localy,...etc
-//upload images on multible providers
-// 
-var storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, `${path.join(__dirname, "uploads")}`);
-  },
-  filename: function (req, file, cb) {
-    const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
-    const fileExtension = file.originalname.split(".")[1];
-    cb(null, `${file.fieldname}-${uniqueSuffix}.${fileExtension}`);
-  },
-  fileFilter: (req, file, cb) => {
-    // if (!file.originalname.match(/\.(jpg|jpeg|png)$/)) {
-    //   return cb(null, false);
-    // } else {
-    //   cb(null, true);
-    // }
-
-    const filetypes = /jpeg|jpg|png|gif/;
-    const extname = filetypes.test(
-      path.extname(file.originalname).toLowerCase()
-    );
-    const mimetype = filetypes.test(file.mimetype);
-
-    if (mimetype && extname) return cb(null, true);
-    else cb("Error: Images Only!");
-  },
-});
-var upload = multer({ storage: storage });
-
-// enable CORS
-app.use(cors());
-
 // add other middleware
 app.use(bodyParser.json());
-app.use(bodyParser.urlencoded({ extended: true }));
-app.use(morgan("dev"));
+app.use(bodyParser.urlencoded({ extended: false }));
 
+const getRandomSeconds = () => {
+  return Math.floor(Math.random() * 1000);
+};
+
+const imgurPromise = () => {
+  return new Promise((resolve, reject) => {
+    setTimeout(() => {
+      resolve({
+        id: "1232",
+        image_link: "ww.ww.vom",
+        name: "imgur",
+      });
+    }, getRandomSeconds());
+  });
+};
+
+const cloudinaryPromise = () => {
+  return new Promise((resolve, reject) => {
+    setTimeout(() => {
+      resolve({
+        id: "12",
+        url: "ww.ww.vom",
+        name: "cloudinary",
+      });
+    }, getRandomSeconds());
+  });
+};
+
+const localStoragePromise = () => {
+  return new Promise((resolve, reject) => {
+    setTimeout(() => {
+      resolve({
+        id: "122",
+        img_url: "ww.ww.vom",
+        name: "localstorage",
+      });
+    }, getRandomSeconds());
+  });
+};
+//all , random , one of the
 // upload single file
-app.post("/upload-avatar", upload.single("avatar"), async (req, res) => {
-  try {
-    const avatar = await req.file;
-    // make sure file is available
-    if (!avatar) {
-      res.status(400).send({
-        status: false,
-        data: "No file is selected.",
-      });
-    } else {
-      //send response
-      res.send({
-        status: true,
-        message: "File is uploaded.",
-        data: {
-          name: avatar.originalname,
-          mimetype: avatar.mimetype,
-          size: avatar.size,
-        },
-      });
-    }
-  } catch (err) {
-    res.status(500).send(err);
+// Addituoinal 
+const providers = {
+  ALL: [imgurPromise, cloudinaryPromise, localStoragePromise],
+  LOCAL: [localStoragePromise],
+  IMGUR: [imgurPromise],
+  CLOUDINARY: [cloudinaryPromise],
+  DEFAULT: [imgurPromise],
+};
+const providerSelection = (strategy) => {
+  if (strategy === "RANDOM") {
+    let providerIndex = Math.floor(Math.random() * providers.ALL.length - 1);
+    return [providers.ALL[providerIndex]];
   }
+  return providers[strategy] || providers.DEFAULT;
+};
+app.post("/upload", (req, res) => {
+  Promise.race(
+    providerSelection('ALL').map((provierFn) => {
+      return provierFn();
+    })
+  )
+    .then((data) => {
+      switch (data.name) {
+        case "imgur":
+          res.send({
+            ...data,
+            url: data.image_link,
+          });
+          break;
+        case "localstorage":
+          res.send({
+            ...data,
+            url: data.img_url,
+          });
+          break;
+
+        default:
+          res.send(data);
+          break;
+      }
+    })
+    .catch((err) => {
+      res.send(err);
+    });
 });
 
 // start the app
